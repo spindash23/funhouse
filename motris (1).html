@@ -1,0 +1,628 @@
+ <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>MOTRIS</title>
+    <style>
+      * {
+        -webkit-user-select: none !important;
+        -webkit-touch-callout: none !important;
+        user-select: none !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      .btn {
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      * {
+        user-select: none;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: monospace;
+        background: #eae6d3;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-user-select: none !important;
+        -webkit-touch-callout: none !important;
+        user-select: none !important;
+        touch-action: manipulation !important;
+      }
+      #screen-wrapper {
+        transform: scale(1.5);
+        transform-origin: top center;
+        margin-top: 20px;
+        position: relative;
+        z-index: 1;
+      }
+      .console {
+        background: #999;
+        padding: 28px;
+        border-radius: 24px;
+        box-shadow: inset 0 0 10px #666;
+      }
+      canvas {
+        display: block;
+        background: #9bbc0f;
+        border: 2px solid #0f380f;
+        border-radius: 10px;
+        image-rendering: pixelated;
+      }
+      #controls {
+        position: relative;
+        z-index: 10;
+        display: flex;
+        margin-top: 120px;
+        justify-content: space-between;
+        width: 100%;
+        padding: 0 40px;
+      }
+      #dpad {
+        display: grid;
+        grid-template-columns: 44px 44px 44px;
+        grid-template-rows: 44px 44px 44px;
+        gap: 4px;
+      }
+      .btn {
+        width: 44px;
+        height: 44px;
+        background: #d16;
+        color: white;
+        font-weight: bold;
+        font-size: 16px;
+        border-radius: 50%;
+        border: 2px solid #922;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: none;
+      }
+      .btn.dpad-btn {
+        background: #888;
+        border-radius: 4px;
+        border: 2px solid #333;
+      }
+      .btn.center {
+        background: #444;
+        pointer-events: none;
+      }
+      #buttons {
+        position: relative;
+        width: 140px;
+        height: 140px;
+        z-index: 11;
+      }
+      .btn-a,
+      .btn-b {
+        width: 60px;
+        height: 60px;
+        font-size: 20px;
+        position: absolute;
+      }
+      .btn-a {
+        right: 0;
+        top: 10px;
+      }
+      .btn-b {
+        left: 0;
+        bottom: 10px;
+      }
+      @media (min-aspect-ratio: 4/3) and (min-width: 720px) {
+        body {
+          justify-content: center;
+          align-items: center;
+        }
+
+        #screen-wrapper {
+          transform: scale(3.69);
+          transform-origin: center;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          translate: -50% -50%;
+          z-index: 1;
+        }
+
+        #controls {
+          position: absolute;
+          bottom: 20px;
+          width: 95%;
+          display: flex;
+          justify-content: space-between;
+          padding: 0 60px;
+          z-index: 2;
+        }
+
+        #dpad,
+        #buttons {
+          transform: scale(1.5);
+          transform-origin: center;
+        }
+
+        #dpad {
+          align-self: flex-end;
+        }
+
+        #buttons {
+          align-self: flex-end;
+        }
+      }
+
+      @media (orientation: landscape) and (max-width: 720px) {
+        #screen-wrapper {
+          transform: scale(-2);
+          transform-origin: center;
+          margin: 0 auto;
+          position: relative;
+          z-index: 1;
+        }
+
+        #controls {
+          position: absolute;
+          top: 50%;
+          left: 0;
+          right: 0;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0 12px;
+          z-index: 2;
+        }
+
+        #dpad,
+        #buttons {
+          transform: scale(2);
+          transform-origin: center;
+        }
+      }
+      .btn {
+        user-select: none;
+        -webkit-user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="screen-wrapper">
+      <div class="console">
+        <canvas id="screen" width="160" height="144"></canvas>
+      </div>
+    </div>
+    <div id="controls">
+      <div id="dpad">
+        <div></div>
+        <div class="btn dpad-btn" data-dir="ArrowUp">↑</div>
+        <div></div>
+        <div class="btn dpad-btn" data-dir="ArrowLeft">←</div>
+        <div class="btn dpad-btn center">•</div>
+        <div class="btn dpad-btn" data-dir="ArrowRight">→</div>
+        <div></div>
+        <div class="btn dpad-btn" data-dir="ArrowDown">↓</div>
+        <div></div>
+      </div>
+      <div id="buttons">
+        <div class="btn btn-a" data-dir="A">A</div>
+        <div class="btn btn-b" data-dir="B">B</div>
+      </div>
+    </div>
+    <script>
+      const Keys = [
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight",
+        "A",
+        "B",
+      ];
+      const InputIntent = Object.fromEntries(Keys.map((k) => [k, false]));
+      const KeyboardInput = Object.fromEntries(Keys.map((k) => [k, false]));
+      const PointerInput = Object.fromEntries(Keys.map((k) => [k, false]));
+      const pointerOwnership = new Map();
+      const inputCooldown = {};
+      const COOLDOWN_TIME = {
+        ArrowLeft: 150,
+        ArrowRight: 150,
+        A: 200,
+        B: 250,
+      };
+
+      document.addEventListener("keydown", (e) => {
+        let key = e.key;
+        if (key === " " || key === "Spacebar") key = "A";
+        if (key === "Enter") key = "B";
+        if (KeyboardInput.hasOwnProperty(key)) KeyboardInput[key] = true;
+      });
+
+      document.addEventListener("keyup", (e) => {
+        let key = e.key;
+        if (key === " " || key === "Spacebar") key = "A";
+        if (key === "Enter") key = "B";
+        if (KeyboardInput.hasOwnProperty(key)) KeyboardInput[key] = false;
+      });
+
+      function getKeyAt(x, y) {
+        const el = document.elementFromPoint(x, y);
+        return el?.dataset?.dir || null;
+      }
+
+      document.addEventListener("pointermove", (e) => {
+        if (e.pointerType === "mouse") return; // 🧠 skip mouse movement
+        pointerOwnership.set(e.pointerId, getKeyAt(e.clientX, e.clientY));
+      });
+      document.addEventListener("pointerdown", (e) => {
+        pointerOwnership.set(e.pointerId, getKeyAt(e.clientX, e.clientY));
+      });
+
+      document.addEventListener("pointerup", (e) => {
+        pointerOwnership.delete(e.pointerId);
+      });
+
+      document.addEventListener("pointercancel", (e) => {
+        pointerOwnership.delete(e.pointerId);
+      });
+
+      function updateInputIntent() {
+        Keys.forEach((k) => (PointerInput[k] = false));
+        for (const key of pointerOwnership.values()) {
+          if (key) PointerInput[key] = true;
+        }
+        Keys.forEach(
+          (k) => (InputIntent[k] = KeyboardInput[k] || PointerInput[k])
+        );
+      }
+
+      function isPressed(key) {
+        const now = performance.now();
+        if (!InputIntent[key]) return false;
+        if (inputCooldown[key] && now - inputCooldown[key] < COOLDOWN_TIME[key])
+          return false;
+        inputCooldown[key] = now;
+        return true;
+      }
+
+      function gbColor(i) {
+        return ["#9bbc0f", "#8bac0f", "#306230", "#0f380f"][i % 4];
+      }
+
+      const canvas = document.getElementById("screen");
+      const ctx = canvas.getContext("2d");
+    </script>
+    <script>
+      window.addEventListener("contextmenu", (e) => e.preventDefault());
+    </script>
+
+    <script>
+      const motrisCartridge = (() => {
+        const cols = 10,
+          rows = 18,
+          blockSize = 8;
+        let canvas, ctx, grid, current, next, hold, hasHeld;
+        let score, lines, level, motrisChain, motrisFlash, debug, comboText;
+        let dropCounter, dropInterval, titleScreen, inputtingName;
+        let highScore = 0;
+
+        const tetrominoes = {
+          I: [[1, 1, 1, 1]],
+          O: [
+            [1, 1],
+            [1, 1],
+          ],
+          T: [
+            [0, 1, 0],
+            [1, 1, 1],
+          ],
+          L: [
+            [1, 0, 0],
+            [1, 1, 1],
+          ],
+          J: [
+            [0, 0, 1],
+            [1, 1, 1],
+          ],
+        };
+
+        function clone(shape) {
+          return shape.map((r) => [...r]);
+        }
+
+        function randomPiece() {
+          const keys = Object.keys(tetrominoes);
+          const key = debug
+            ? "I"
+            : keys[Math.floor(Math.random() * keys.length)];
+          return { shape: clone(tetrominoes[key]), x: 3, y: 0 };
+        }
+
+        function collide(p) {
+          for (let y = 0; y < p.shape.length; y++)
+            for (let x = 0; x < p.shape[y].length; x++)
+              if (
+                p.shape[y][x] &&
+                (p.y + y >= rows ||
+                  p.x + x < 0 ||
+                  p.x + x >= cols ||
+                  grid[p.y + y][p.x + x])
+              )
+                return true;
+          return false;
+        }
+
+        function merge(p) {
+          for (let y = 0; y < p.shape.length; y++)
+            for (let x = 0; x < p.shape[y].length; x++)
+              if (p.shape[y][x]) grid[p.y + y][p.x + x] = 1;
+        }
+
+        function sweep() {
+          let count = 0;
+          for (let y = rows - 1; y >= 0; y--) {
+            if (grid[y].every((cell) => cell)) {
+              grid.splice(y, 1);
+              grid.unshift(Array(cols).fill(0));
+              count++;
+              y++;
+            }
+          }
+          if (count > 0) {
+            lines += count;
+            level = 1 + Math.floor(lines / 10);
+            dropInterval = Math.max(120, 550 - level * 20);
+            if (count === 4) {
+              score += motrisChain > 0 ? 512 : 256;
+              comboText = motrisChain > 0 ? `COMBO x${motrisChain + 1}` : "";
+              motrisChain++;
+              motrisFlash = 30;
+            } else {
+              score += count * 50;
+              motrisChain = 0;
+              comboText = "";
+            }
+          }
+        }
+
+        function resetGame() {
+          grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+          score = lines = level = motrisChain = 0;
+          dropCounter = 0;
+          dropInterval = 500;
+          current = randomPiece();
+          next = randomPiece();
+          hold = { shape: clone(tetrominoes.I), x: 3, y: 0 };
+          hasHeld = false;
+          inputtingName = false;
+          motrisFlash = 0;
+          comboText = "";
+        }
+
+        function init(c, cxt) {
+          canvas = c;
+          ctx = cxt;
+          debug = false;
+          titleScreen = true;
+          resetGame();
+        }
+
+        function update() {
+          if (titleScreen) {
+            if (InputIntent["ArrowUp"] && InputIntent["ArrowDown"])
+              debug = true;
+            if (isPressed("A")) {
+              titleScreen = false;
+            }
+            return;
+          }
+
+          if (inputtingName) {
+            if (isPressed("A")) resetGame();
+            else if (isPressed("B")) {
+              window.location.href =
+                "https://victoriadonna.com/products/motris-color-edition?utm_source=MOTRIS&utm_medium=product-links&utm_content=web"; // 🔁 same tab redirect
+            }
+            if (inputtingName) return;
+          }
+
+          if (score > highScore) highScore = score;
+
+          dropCounter += 16;
+          if (dropCounter > dropInterval) {
+            dropCounter = 0;
+            current.y++;
+            if (collide(current)) {
+              current.y--;
+              merge(current);
+              sweep();
+              current = next;
+              next = randomPiece();
+              hasHeld = false;
+              if (collide(current)) inputtingName = true;
+            }
+          }
+
+          if (isPressed("ArrowLeft")) {
+            current.x--;
+            if (collide(current)) current.x++;
+          }
+          if (isPressed("ArrowRight")) {
+            current.x++;
+            if (collide(current)) current.x--;
+          }
+          if (InputIntent["ArrowDown"]) {
+            dropCounter = dropInterval;
+          }
+          if (isPressed("A")) {
+            const r = current.shape[0].map((_, i) =>
+              current.shape.map((row) => row[i]).reverse()
+            );
+            const b = current.shape;
+            current.shape = r;
+            if (collide(current)) current.shape = b;
+          }
+          if (isPressed("B") && !hasHeld) {
+            let t = hold;
+            hold = current;
+            current = t || next;
+            next = t ? next : randomPiece();
+            current.x = 3;
+            current.y = 0;
+            hasHeld = true;
+          }
+        }
+        function drawBlock(x, y, color = gbColor(3)) {
+          ctx.fillStyle = color;
+          ctx.fillRect(x * blockSize, y * blockSize, blockSize, blockSize);
+        }
+
+        function drawGhost() {
+          let ghostY = current.y;
+          while (!collide({ ...current, y: ghostY + 1 })) ghostY++;
+          ctx.globalAlpha = 0.3;
+          for (let y = 0; y < current.shape.length; y++)
+            for (let x = 0; x < current.shape[y].length; x++)
+              if (current.shape[y][x]) drawBlock(current.x + x, ghostY + y);
+          ctx.globalAlpha = 1;
+        }
+
+        function drawMini(piece, ox, oy) {
+          if (!piece) return;
+          for (let y = 0; y < piece.shape.length; y++)
+            for (let x = 0; x < piece.shape[y].length; x++)
+              if (piece.shape[y][x])
+                drawBlock(ox / blockSize + x, oy / blockSize + y);
+        }
+
+        function draw() {
+          ctx.fillStyle = gbColor(0);
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          ctx.strokeStyle = gbColor(2);
+          for (let x = 0; x <= cols; x++) {
+            ctx.beginPath();
+            ctx.moveTo(x * blockSize, 0);
+            ctx.lineTo(x * blockSize, rows * blockSize);
+            ctx.stroke();
+          }
+          for (let y = 0; y <= rows; y++) {
+            ctx.beginPath();
+            ctx.moveTo(0, y * blockSize);
+            ctx.lineTo(cols * blockSize, y * blockSize);
+            ctx.stroke();
+          }
+
+          ctx.strokeStyle = gbColor(3);
+          ctx.lineWidth = 1;
+          ctx.strokeRect(0, 0, cols * blockSize, rows * blockSize);
+
+          for (let y = 0; y < rows; y++)
+            for (let x = 0; x < cols; x++) if (grid[y][x]) drawBlock(x, y);
+
+          if (!titleScreen && !inputtingName) {
+            drawGhost();
+            for (let y = 0; y < current.shape.length; y++)
+              for (let x = 0; x < current.shape[y].length; x++)
+                if (current.shape[y][x])
+                  drawBlock(current.x + x, current.y + y);
+          }
+
+          const labels = [
+            ["SCORE", score, 10],
+            ["LINES", lines, 32],
+            ["LEVEL", level, 54],
+            ["HI-SCORE", highScore, 76],
+          ];
+          labels.forEach(([label, value, y]) => {
+            ctx.fillStyle = gbColor(3);
+            ctx.fillText(label, 88, y);
+            ctx.strokeStyle = gbColor(2);
+            ctx.beginPath();
+            ctx.moveTo(88, y + 2);
+            ctx.lineTo(160, y + 2);
+            ctx.stroke();
+            ctx.fillText(String(value).padStart(6, " "), 88, y + 10);
+          });
+
+          ctx.fillStyle = gbColor(3);
+          ctx.fillText("NEXT", 84, 96);
+          drawMini(next, 84, 96 + 8);
+          ctx.strokeRect(84, 96, 32, 32);
+
+          ctx.fillText("HOLD", 124, 96);
+          drawMini(hold, 124, 96 + 8);
+          ctx.strokeRect(124, 96, 32, 32);
+
+          ctx.font = "bold 8px monospace";
+          ctx.textAlign = "right";
+          ctx.fillText(
+            debug ? "DEBUG MODE" : "MOTRIS",
+            canvas.width - 4,
+            canvas.height - 2
+          );
+          ctx.textAlign = "left"; // restore default for other text
+
+          if (motrisFlash > 0) {
+            ctx.fillStyle = gbColor(3);
+            ctx.fillRect(0, 40, canvas.width, 40);
+            ctx.fillStyle = gbColor(1);
+            ctx.font = "bold 12px monospace";
+            ctx.fillText("MOTRIS!", 45, 60);
+            if (comboText) ctx.fillText(comboText, 30, 76);
+            motrisFlash--;
+          }
+
+          if (titleScreen) {
+            ctx.fillStyle = gbColor(3);
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = gbColor(1);
+            ctx.font = "bold 16px monospace";
+            ctx.fillText("MOTRIS", 50, 64);
+            ctx.font = "8px monospace";
+            ctx.fillText("PRESS A TO START", 42, 84);
+          }
+
+          if (inputtingName) {
+            ctx.fillStyle = gbColor(3);
+            ctx.fillRect(0, 50, canvas.width, 44);
+            ctx.fillStyle = gbColor(1);
+            ctx.fillText("GAME OVER", 45, 66);
+            ctx.fillText("A TO RESTART", 40, 78);
+            ctx.fillText("B FOR $1 COLOR UPGRADE", 14, 90);
+          }
+        }
+
+        return { init, update, draw };
+      })();
+    </script>
+    <script>
+      motrisCartridge.init(canvas, ctx);
+
+      function loop() {
+        updateInputIntent();
+        motrisCartridge.update();
+        motrisCartridge.draw();
+        requestAnimationFrame(loop);
+      }
+
+      loop();
+    </script>
+    <script>
+      // Block context menu
+      window.addEventListener("contextmenu", (e) => e.preventDefault());
+
+      // Block long-press highlight on iOS
+      document.addEventListener("selectstart", (e) => e.preventDefault());
+    </script>
+  </body>
+</html>
